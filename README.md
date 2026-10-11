@@ -1,4 +1,4 @@
-# march-madness-physics
+# march-madness-predictor
 
 Simulate the men's NCAA tournament and come out with *probabilities*, not just
 picks.
@@ -77,6 +77,68 @@ random numbers - so simulated results are identical for any batch count.
 (`H_champ`, `h_champ`, `P_max`, `P_top3`, `C`, `N_eff`, `H_r{N}`, `h_r{N}`),
 and `SimulationResult.standard_errors()` returns their standard errors.
 
+## Results
+
+Two questions: are the probabilities *right* (backtest), and how does the
+model's uncertainty behave under the effective-noise knob (sweep)?
+
+### Backtest (walk-forward, 2021-2025)
+
+Each season is predicted from earlier seasons only; nothing from the
+evaluation season enters the fit.  Four seasons scored (2021 is skipped: the
+source file has a game-count defect), 4,000 sims each, seed 0.
+
+| metric | model | trivial baseline | better by |
+| --- | ---: | ---: | ---: |
+| title log loss | **3.115** | 4.220 (uniform over 68) | 26% |
+| win log loss | **0.616** | 0.693 (coin flip) | 11% |
+| advancement Brier | **0.2344** | 0.2500 (constant 0.5) | 6.2% |
+| reach Brier | **0.0835** | per-round base rate | - |
+
+Per season - the eventual champion, the model's title probability for it, and
+the model's top pick:
+
+| season | champion (model P) | top pick (P) | title log loss | win log loss |
+| --- | --- | --- | ---: | ---: |
+| 2022 | Kansas 14.5% | Duke 15.0% | 1.928 | 0.561 |
+| 2023 | Connecticut 1.7% | Duke 17.3% | 4.075 | 0.729 |
+| 2024 | Connecticut 3.9% | Duke 15.3% | 3.251 | 0.581 |
+| 2025 | Florida 4.0% | Duke 14.3% | 3.206 | 0.591 |
+
+Win log loss beats the coin flip in rounds 1-2 (0.571) but not in rounds 3-6
+(0.757), where a handful of games carry almost no signal - which is why the
+backtest reports reliability tables per band rather than one number.
+
+### The effective-noise sweep
+
+`noise_scale` (the "lambda" of the design notes) scales the *total effective
+margin uncertainty* by dividing the deterministic margin - it is the one knob
+that walks from a near-deterministic favourite to a wide-open field.  Holding
+the random draws fixed across the grid (common random numbers), the effect is
+cleanly monotone over six 68-team seasons (2016, 2018, 2019, 2021, 2023,
+2025), at 4,000 sims each:
+
+![Championship entropy and favourite title probability versus noise_scale](results/noise_sweep.png)
+
+For 2025 the fitted model (`noise_scale = 1`) sits at normalized championship
+entropy `h = 0.73` and effective contenders `N_eff = 14.3`; turning the knob
+up flattens the race, and down sharpens it:
+
+| noise_scale | 0.25 | 0.5 | 0.75 | 1.0 | 1.5 | 2.0 | 3.0 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| championship entropy `h` | 0.31 | 0.51 | 0.64 | 0.73 | 0.83 | 0.87 | 0.92 |
+| favourite `P(max)` | 52% | 29% | 20% | 15% | 10% | 8% | 5% |
+| effective contenders `N_eff` | 2.8 | 5.9 | 9.8 | 14.3 | 24.1 | 30.8 | 40.6 |
+
+Round entropy shows *where* the uncertainty lives: the first round is already
+near-maximal (everyone plays), so the knob mostly moves the question of who
+survives the late rounds.
+
+![Round entropy by round, fitted model vs doubled noise](results/round_entropy.png)
+
+Reproduce with `python tools/noise_sweep.py --sims 10000`, which writes
+`results/noise_sweep.csv` and both figures.
+
 ## Getting started
 
 ```bash
@@ -115,11 +177,13 @@ mypy
 | `src/bracket.py` | bracket graph from seeds/slots |
 | `src/simulate.py` | Monte Carlo tournament runner |
 | `src/backtest.py` | scoring metrics and ground truth |
-| `tools/` | runnable CLIs: simulate, backtest, comparisons |
+| `tools/` | runnable CLIs: simulate, backtest, noise sweep |
 | `tests/` | pytest suite |
 
 ## Where it's going
 
-- More seasons in the backtest and tighter calibration reporting
+- More seasons in the backtest (2021 needs a fixed source file) and tighter
+  calibration reporting
 - Feature work on volatility and the latent-strength term
-- A written-up results section once the metrics settle
+- Choosing `noise_scale` by forecasting performance out of sample, not by
+  tuning it against the seasons it is scored on

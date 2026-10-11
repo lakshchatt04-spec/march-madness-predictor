@@ -107,12 +107,21 @@ class MatchupParams:
             :func:~src.calibration.estimate_latent_fraction.  Values at or
             above `1` are rejected, since they would leave the game noise
             degenerate.
+        noise_scale: Multiplier on the total effective margin uncertainty,
+            applied by dividing the *deterministic* margin (the Elo gap plus
+            site effect, in points) by it.  `1.0` is the fitted model.  A value
+            `n` flattens every win probability toward 0.5, turning ``Phi`` into
+            ``Phi(mu / (n * tau))``.  The latent drift and the volatility
+            scale themselves are never rescaled, so the latent and per-game
+            draws from a given seed are bit-for-bit identical for any value;
+            only the derived odds move.
     """
 
     elo_per_point: float = 30.0
     home_advantage_points: float = 1.8
     volatility: VolatilityParams = DEFAULT_VOLATILITY
     latent_fraction: float = 0.0
+    noise_scale: float = 1.0
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.elo_per_point) or self.elo_per_point <= 0.0:
@@ -135,6 +144,10 @@ class MatchupParams:
             raise ValueError(
                 "latent_fraction must be in [0, 1), got "
                 f"{self.latent_fraction!r}"
+            )
+        if not math.isfinite(self.noise_scale) or self.noise_scale <= 0.0:
+            raise ValueError(
+                f"noise_scale must be positive and finite, got {self.noise_scale!r}"
             )
 
     def hca_for(self, venue: Venue) -> float:
@@ -172,6 +185,12 @@ def expected_margin_points(
             draws from :func:`draw_latent_strength`, added to the mean.  Kept
             in points so that the perturbation composes with the Elo conversion
             instead of being added to a rating.
+
+    The deterministic margin - the Elo gap and the site effect - is divided by
+    ``params.noise_scale`` before the latent drift is added.  This rescales the
+    total effective margin uncertainty *without* touching the random-draw
+    machinery: the deterministic part gets flattened, while the drift and sigma
+    stay exactly as the fit produced them.
     """
     for name, value in (("team", team), ("opponent", opponent)):
         if not isinstance(value, ParticleTeam):
@@ -184,7 +203,8 @@ def expected_margin_points(
                 raise ValueError(f"{name} latent offset must be finite, got {offset!r}")
     elo_gap = float(team.elo_rating) - float(opponent.elo_rating)
     drift = (latent[0] - latent[1]) if latent is not None else 0.0
-    return elo_gap / params.elo_per_point + drift + params.hca_for(venue)
+    deterministic = elo_gap / params.elo_per_point + params.hca_for(venue)
+    return deterministic / params.noise_scale + drift
 
 
 def margin_scale_points(

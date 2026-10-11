@@ -34,12 +34,48 @@ sampled from that state rather than hand-tuned.
    drawn once per team per tournament, so a hot or cold run spans the whole
    bracket instead of resetting every game.
 4. **Simulate** (`src/bracket.py`, `src/simulate.py`) - the bracket graph comes
-   from Kaggle's seeds/slots files, then Monte Carlo plays it out many times and
-   aggregates title and per-round probabilities.
+   from Kaggle's seeds/slots files, then Monte Carlo plays it out many times
+   and aggregates title and per-round probabilities plus the ensemble
+   observables described below.
 5. **Score** (`src/backtest.py`, `tools/backtest.py`) - walk-forward backtest:
    each evaluation season is predicted using only earlier seasons, then scored
    with log loss and Brier against their trivial baselines, plus reliability
    tables.
+
+## Ensemble observables
+
+Beyond picking winners, `SimulationResult` reports summary statistics of the
+*simulated ensemble* - they describe the shape of the model's title
+distribution, not how good the forecast is (that is the backtest's job, via
+log loss and Brier).
+
+- **Championship entropy** - Shannon entropy of the title distribution,
+  `H = -sum_i P_i ln P_i`, in nats. It is zero when one team wins every
+  simulation and `ln F` when the title is spread evenly over the whole field.
+  The normalized version `h = H / ln F` sits in `[0, 1]`: low means the model
+  sees a few clear contenders, high means the title looks wide open.
+- **Concentration** - the same picture in different units. `P(max)` is the
+  favourite's title probability, `P(top 3)` the three front-runners summed,
+  `C = sum_i P_i^2` the Herfindahl index (from `1/F` for an even field to 1
+  for a certain champion), and `N_eff = 1/C` the effective number of
+  contenders - how many teams would have to share the title evenly to produce
+  the same concentration. A settled championship has low entropy and high
+  concentration; an open one the reverse.
+- **Round entropy** - the entropy of the marginal distribution over which
+  teams are present at the start of each round, normalized by `ln F`. The
+  first round sits at 1 (everyone plays), and later rounds fall as the field
+  narrows toward the finalists. It is a per-round marginal - the uncertainty
+  about who is still alive - not the entropy of whole tournament paths.
+
+Monte Carlo error: each run is split into independent batches (20 by default)
+and the standard error of every observable is the batch-to-batch spread
+divided by `sqrt(n_batches)`, reported as `value +/- se` at the end of
+`SimulationResult.summary()`. The batching only *counts* - it never draws
+random numbers - so simulated results are identical for any batch count.
+
+`SimulationResult.observables()` returns everything as a dict
+(`H_champ`, `h_champ`, `P_max`, `P_top3`, `C`, `N_eff`, `H_r{N}`, `h_r{N}`),
+and `SimulationResult.standard_errors()` returns their standard errors.
 
 ## Getting started
 
@@ -63,7 +99,7 @@ python tools/backtest.py --seasons 2021 2022 2023 2024 2025
 Checks:
 
 ```bash
-pytest          # 291 tests
+pytest          # 336 tests
 ruff check .
 mypy
 ```

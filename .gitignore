@@ -16,3 +16,6 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 .venv/
+
+# Agent learning-mode notes
+.vibe-wise/

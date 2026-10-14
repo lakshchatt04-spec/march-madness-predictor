@@ -90,6 +90,11 @@ Each season is predicted from earlier seasons only; nothing from the
 evaluation season enters the fit.  Four seasons scored (2021 is skipped: the
 source file has a game-count defect), 4,000 sims each, seed 0.
 
+**This is a small, first-look evaluation.** Four tournaments is far too few to
+establish that the probabilities are calibrated in general - most of the
+metric comes from a handful of games - so read the numbers below as a sanity
+check against trivial baselines, not as a general claim.
+
 | metric | model | trivial baseline | better by |
 | --- | ---: | ---: | ---: |
 | title log loss | **3.115** | 4.220 (uniform over 68) | 26% |
@@ -114,14 +119,14 @@ backtest reports reliability tables per band rather than one number.
 ### The effective-noise sweep
 
 `noise_scale` is the one knob that walks from a near-certain favourite to a
-wide-open field. It divides the **deterministic** margin - the Elo gap plus the
-site effect, in points - and nothing else: the latent drift and the volatility
-scale `tau` are untouched, so a value `n` replaces `Phi(mu / tau)` with
-`Phi(deterministic / (n * tau) + drift / tau)`. The random draws are therefore
-identical for every `n`, and only the derived odds move. Holding those draws
-fixed across the grid (common random numbers), the effect is cleanly monotone
-over six 68-team seasons (2016, 2018, 2019, 2021, 2023, 2025), at 4,000 sims
-each:
+wide-open field. In `expected_margin_points` it divides the **deterministic**
+margin - the Elo gap plus the site effect, in points - and nothing else: the
+latent drift and the volatility scale `tau` are untouched, so a value `n`
+replaces `Phi(mu / tau)` with `Phi(deterministic / (n * tau) + drift / tau)`.
+The random draws are therefore identical for every `n`, and only the derived
+odds move. Holding those draws fixed across the grid (common random numbers),
+the effect is cleanly monotone over six 68-team seasons (2016, 2018, 2019,
+2021, 2023, 2025), at 4,000 sims each:
 
 ![Championship entropy and favourite title probability versus noise_scale](results/noise_sweep.png)
 
@@ -226,10 +231,18 @@ mypy
 | `tools/` | runnable CLIs: simulate, backtest, noise sweep, recency experiment |
 | `tests/` | pytest suite |
 
-## Where it's going
+## Limitations and next steps
 
-- Fix the 2021 source file so the backtest covers five seasons rather than four
-- Re-examine the latent-strength term: on the held-out seasons, turning it off
-  scored better on title log loss than turning it on (a lead, not yet a result)
-- Choose `noise_scale` by forecasting performance out of sample rather than
-  tuning it against the seasons it is scored on
+- **Evaluation scope.** The backtest scores four tournaments (2022-2025). The
+  *fit* uses 20+ seasons from 2003 on, but four held-out brackets is a first
+  look, not a general calibration claim.
+- **Team strength is a pooled, recency-agnostic rating**, so the top of the
+  rating list reads like a prestige ranking rather than current form (fitted
+  strength tracks the seed at ~0.82 but the current Elo at ~0.15). Recency
+  weighting was tried and rejected, above.
+- **The latent-strength term is unproven.** On the same held-out seasons,
+  turning it off scored slightly better on title log loss - a lead to check,
+  not a result.
+
+A natural next step is to fix the 2021 source file so the backtest covers five
+seasons, then settle the latent term on more of them.

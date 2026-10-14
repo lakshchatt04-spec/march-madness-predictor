@@ -113,12 +113,15 @@ backtest reports reliability tables per band rather than one number.
 
 ### The effective-noise sweep
 
-`noise_scale` (the "lambda" of the design notes) scales the *total effective
-margin uncertainty* by dividing the deterministic margin - it is the one knob
-that walks from a near-deterministic favourite to a wide-open field.  Holding
-the random draws fixed across the grid (common random numbers), the effect is
-cleanly monotone over six 68-team seasons (2016, 2018, 2019, 2021, 2023,
-2025), at 4,000 sims each:
+`noise_scale` is the one knob that walks from a near-certain favourite to a
+wide-open field. It divides the **deterministic** margin - the Elo gap plus the
+site effect, in points - and nothing else: the latent drift and the volatility
+scale `tau` are untouched, so a value `n` replaces `Phi(mu / tau)` with
+`Phi(deterministic / (n * tau) + drift / tau)`. The random draws are therefore
+identical for every `n`, and only the derived odds move. Holding those draws
+fixed across the grid (common random numbers), the effect is cleanly monotone
+over six 68-team seasons (2016, 2018, 2019, 2021, 2023, 2025), at 4,000 sims
+each:
 
 ![Championship entropy and favourite title probability versus noise_scale](results/noise_sweep.png)
 
@@ -225,10 +228,8 @@ mypy
 
 ## Where it's going
 
-- More seasons in the backtest (2021 needs a fixed source file) and tighter
-  calibration reporting
-- Re-examining the latent-strength term: on the held-out seasons, turning it off
+- Fix the 2021 source file so the backtest covers five seasons rather than four
+- Re-examine the latent-strength term: on the held-out seasons, turning it off
   scored better on title log loss than turning it on (a lead, not yet a result)
-- Feature work on volatility and the latent-strength term
-- Choosing `noise_scale` by forecasting performance out of sample, not by
+- Choose `noise_scale` by forecasting performance out of sample rather than
   tuning it against the seasons it is scored on

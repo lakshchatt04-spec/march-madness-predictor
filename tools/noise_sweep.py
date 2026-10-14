@@ -126,9 +126,7 @@ def plot_sweep(rows: list[dict], outdir: Path) -> None:
     axes[0].set_ylabel("normalized championship entropy  h")
     axes[1].set_xlabel("noise_scale (lambda)")
     axes[1].set_ylabel("favourite title probability  P(max)")
-    fig.suptitle(
-        "Scaling total effective margin uncertainty flattens the title race"
-    )
+    fig.suptitle("Raising noise_scale flattens the title race")
     fig.tight_layout()
     out = outdir / "noise_sweep.png"
     fig.savefig(out, dpi=150)

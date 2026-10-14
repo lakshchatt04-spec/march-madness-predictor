@@ -450,8 +450,9 @@ def simulate_bracket(
             batch-to-batch spread.  Purely diagnostic: the split only counts
             outcomes, never draws random numbers, so every simulated count is
             identical for any ``n_batches``.
-        noise_scale: Scale the total effective margin uncertainty by replacing
-            ``matchup`` with ``replace(matchup, noise_scale=noise_scale)``.
+        noise_scale: Divisor on the deterministic margin (the Elo gap plus the
+            site effect), applied by
+            ``dataclasses.replace(matchup, noise_scale=noise_scale)``.
             ``None`` keeps ``matchup``'s own ``noise_scale`` (the fitted model
             uses 1.0).  Larger values flatten every win probability toward 0.5
             without changing any random draw, so two runs that differ only in
@@ -594,9 +595,9 @@ def simulate_seasons(
             the whole run stays reproducible from one number.
         n_batches: Batches per season for Monte Carlo standard errors; see
             :func:`simulate_bracket`.
-        noise_scale: Scale the total effective margin uncertainty; passed
-            through to :func:`simulate_bracket` for every season.  ``None``
-            keeps each season's own ``noise_scale``.
+        noise_scale: Divisor on the deterministic margin; passed through to
+            :func:`simulate_bracket` for every season.  ``None`` keeps each
+            season's own ``noise_scale``.
 
     Returns:
         `{season: SimulationResult}`.

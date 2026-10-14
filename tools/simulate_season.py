@@ -29,7 +29,7 @@ DATA_DIRNAME = "march-machine-learning-mania-2026"
 def _default_data() -> Path:
     """Locate the Kaggle directory from either the root or a synced copy.
 
-    `tools/` exists both at the repo root and inside `march-madness-physics`,
+    `tools/` exists both at the repo root and inside `march-madness-predictor`,
     so walking a fixed number of parents up and appending the data folder yields a
     doubled path in one of them.  Search upwards instead.
     """
@@ -37,7 +37,7 @@ def _default_data() -> Path:
         candidate = parent / DATA_DIRNAME
         if candidate.is_dir():
             return candidate
-        nested = parent / "march-madness-physics" / DATA_DIRNAME
+        nested = parent / "march-madness-predictor" / DATA_DIRNAME
         if nested.is_dir():
             return nested
     raise FileNotFoundError(

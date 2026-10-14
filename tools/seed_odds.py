@@ -40,7 +40,7 @@ DATA_DIRNAME = "march-machine-learning-mania-2026"
 def _default_data() -> Path:
     for parent in Path(__file__).resolve().parents:
         for candidate in (parent / DATA_DIRNAME,
-                          parent / "march-madness-physics" / DATA_DIRNAME):
+                          parent / "march-madness-predictor" / DATA_DIRNAME):
             if candidate.is_dir():
                 return candidate
     raise FileNotFoundError(f"could not find {DATA_DIRNAME}")

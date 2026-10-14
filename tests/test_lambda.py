@@ -1,11 +1,11 @@
 """Tests for the ``noise_scale`` knob on :class:`MatchupParams`.
 
-``noise_scale`` rescales the total effective margin uncertainty by dividing
-the *deterministic* margin (Elo gap plus site effect) by it.  This is the
-same choice the design audit called "lambda" (the effective temperature):
-``P = Phi(mu / (noise_scale * tau))``, with the latent drift and the
-volatility scale left strictly alone.  Code keeps the neutral name;
-``noise_scale = 1.0`` must be a bit-for-bit no-op.
+``noise_scale`` divides the deterministic margin (the Elo gap plus the site
+effect) and nothing else - the latent drift and the volatility scale are
+untouched, so a value ``n`` replaces ``Phi(mu / tau)`` with
+``Phi(deterministic / (n * tau) + drift / tau)``.  It is the "lambda" of the
+design notes: the fitted value ``1.0`` is a bit-for-bit no-op, and larger
+values flatten every win probability toward 0.5.
 
 Two properties carry the whole design:
 

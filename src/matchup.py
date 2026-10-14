@@ -107,14 +107,14 @@ class MatchupParams:
             :func:~src.calibration.estimate_latent_fraction.  Values at or
             above `1` are rejected, since they would leave the game noise
             degenerate.
-        noise_scale: Multiplier on the total effective margin uncertainty,
-            applied by dividing the *deterministic* margin (the Elo gap plus
-            site effect, in points) by it.  `1.0` is the fitted model.  A value
-            `n` flattens every win probability toward 0.5, turning ``Phi`` into
-            ``Phi(mu / (n * tau))``.  The latent drift and the volatility
-            scale themselves are never rescaled, so the latent and per-game
-            draws from a given seed are bit-for-bit identical for any value;
-            only the derived odds move.
+        noise_scale: Divisor on the *deterministic* margin - the Elo gap plus
+            the site effect, in points - and nothing else.  `1.0` is the fitted
+            model.  A value `n` replaces ``Phi(mu / tau)`` with
+            ``Phi(deterministic / (n * tau) + drift / tau)``, flattening every
+            win probability toward 0.5.  The latent drift and the volatility
+            scale `tau` are never rescaled, so the latent and per-game draws
+            from a given seed are bit-for-bit identical for any value; only the
+            derived odds move.
     """
 
     elo_per_point: float = 30.0
@@ -187,10 +187,9 @@ def expected_margin_points(
             instead of being added to a rating.
 
     The deterministic margin - the Elo gap and the site effect - is divided by
-    ``params.noise_scale`` before the latent drift is added.  This rescales the
-    total effective margin uncertainty *without* touching the random-draw
-    machinery: the deterministic part gets flattened, while the drift and sigma
-    stay exactly as the fit produced them.
+    ``params.noise_scale`` before the latent drift is added.  This flattens the
+    deterministic part of the margin *without* touching the random-draw
+    machinery: the drift and sigma stay exactly as the fit produced them.
     """
     for name, value in (("team", team), ("opponent", opponent)):
         if not isinstance(value, ParticleTeam):

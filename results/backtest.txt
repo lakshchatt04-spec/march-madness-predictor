@@ -1,4 +1,4 @@
-﻿2021: fitting on 2003-2020
+2021: fitting on 2003-2020
   SKIPPED: season 2021 has 66 tournament games but a 68-team single-elimination field needs 67; cannot reconstruct ground truth
 
 2022: fitting on 2003-2021
@@ -6,24 +6,28 @@
   prior teams   1 on the ridge prior (no D-I history in fit window)
   champion      Kansas (model 14.5%, top pick Duke at 15.0%)
   field         Duke 15.0%, Kansas 14.5%, North Carolina 10.5%, Kentucky 7.6%, Gonzaga 7.2%
+  seed-only     title log loss 2.398 | win log loss 0.714 | adv Brier 0.2037 | reach Brier 0.0878
 
 2023: fitting on 2003-2022
   title log loss 4.075 | win log loss 0.729 over 63 games | adv Brier 0.2771 | reach Brier 0.0975 | phi=0.270
   prior teams   5 on the ridge prior (no D-I history in fit window)
   champion      Connecticut (model 1.7%, top pick Duke at 17.3%)
   field         Duke 17.3%, Kansas 14.9%, Gonzaga 12.2%, Kentucky 7.7%, Arizona 4.8%
+  seed-only     title log loss 4.913 | win log loss 0.675 | adv Brier 0.2287 | reach Brier 0.0977
 
 2024: fitting on 2003-2023
   title log loss 3.251 | win log loss 0.581 over 63 games | adv Brier 0.2263 | reach Brier 0.0823 | phi=0.271
   prior teams   1 on the ridge prior (no D-I history in fit window)
   champion      Connecticut (model 3.9%, top pick Duke at 15.3%)
   field         Duke 15.3%, Kansas 11.1%, North Carolina 10.1%, Gonzaga 7.3%, Kentucky 6.9%
+  seed-only     title log loss 2.377 | win log loss 0.617 | adv Brier 0.1848 | reach Brier 0.0778
 
 2025: fitting on 2003-2024
   title log loss 3.206 | win log loss 0.591 over 63 games | adv Brier 0.2267 | reach Brier 0.0818 | phi=0.273
   prior teams   2 on the ridge prior (no D-I history in fit window)
   champion      Florida (model 4.0%, top pick Duke at 14.3%)
   field         Duke 14.3%, Kansas 12.5%, North Carolina 8.8%, Gonzaga 7.7%, Michigan St 6.0%
+  seed-only     title log loss 2.331 | win log loss 0.515 | adv Brier 0.1529 | reach Brier 0.0592
 
 ====================================================================
 skipped (incomplete source data): [2021]
@@ -34,6 +38,12 @@ skipped (incomplete source data): [2021]
   mean reach Brier        0.0835  (vs per-round base rate, below)
   top-pick hit rate       0.0%
   mean top-pick prob      15.5%
+
+  seed-only baseline:
+    mean title log loss     3.004
+    mean win log loss       0.630
+    mean advancement Brier  0.1925
+    mean reach Brier        0.0806
 
   round  reach Brier floor
       1             0.0554

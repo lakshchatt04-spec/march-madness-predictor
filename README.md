@@ -90,12 +90,28 @@ establish that the probabilities are calibrated in general - most of the
 metric comes from a handful of games - so read the numbers below as a sanity
 check against trivial baselines, not as a general claim.
 
-| metric | model | trivial baseline | better by |
+| metric | model | seed-only | trivial baseline |
 | --- | ---: | ---: | ---: |
-| title log loss | **3.115** | 4.220 (uniform over 68) | 26% |
-| win log loss | **0.616** | 0.693 (coin flip) | 11% |
-| advancement Brier | **0.2344** | 0.2500 (constant 0.5) | 6.2% |
-| reach Brier | **0.0835** | per-round base rate | - |
+| title log loss | 3.115 | **3.004** | 4.220 (uniform over 68) |
+| win log loss | **0.616** | 0.630 | 0.693 (coin flip) |
+| advancement Brier | 0.2344 | **0.1925** | 0.2500 (constant 0.5) |
+| reach Brier | 0.0835 | **0.0806** | per-round base rate |
+
+The **seed-only** column is the floor that actually matters: a one-feature
+logistic regression on the seed difference for game outcomes, the historical
+share of titles won by each seed (Laplace-smoothed) split across the teams
+carrying it, and per-seed per-round advancement/reach rates - all fitted
+walk-forward on the same earlier seasons and using only the seed line
+(`src/baselines.py`).
+
+On these four seasons that baseline **beats the full model on three of the four
+metrics**: it is the better title forecaster (3.004 vs 3.115), predicts who
+advances better (0.1925 vs 0.2344) and who reaches each round better (0.0806 vs
+0.0835). The model is only better on the per-game win log loss, and barely
+(0.616 vs 0.630). So the model's headline edge over the uniform field (26% on
+title log loss) is **mostly the seeding**, not the Elo, volatility or latent
+terms. Four tournaments is a small sample, but on this evidence the extra
+machinery has not clearly paid for itself.
 
 Per season - the eventual champion, the model's title probability for it, and
 the model's top pick:
@@ -198,6 +214,15 @@ grid edge was the tell I ignored. That's why the default is still the plain
 all-history model, and why I now hold in-sample improvements at arm's length
 until they survive a season they never touched.
 
+The seed-only baseline made a related point from a different direction. I had
+read "26% better than uniform" as the model doing something real; lining it up
+against a forecast that reads only the seed line showed that most of that gap
+was the seeding already fed into it, and that on the same four seasons the
+simpler forecast was the better title and advancement forecaster. Building the
+baseline taught me more about what the model was worth than any single
+prediction it made.
+
+
 ## Getting started
 
 ```bash
@@ -214,13 +239,13 @@ repo root (the tools search upwards for it).
 python tools/simulate_season.py --season 2025 --sims 20000
 
 # Walk-forward backtest over several seasons
-python tools/backtest.py --seasons 2021 2022 2023 2024 2025
+python tools/backtest.py --seasons 2021 2022 2023 2024 2025 --baseline
 ```
 
 Checks:
 
 ```bash
-pytest          # 356 tests
+pytest          # 367 tests
 ruff check .
 mypy
 ```
@@ -236,6 +261,7 @@ mypy
 | `src/bracket.py` | bracket graph from seeds/slots |
 | `src/simulate.py` | Monte Carlo tournament runner |
 | `src/backtest.py` | scoring metrics and ground truth |
+| `src/baselines.py` | seed-only baseline for comparison |
 | `tools/` | runnable CLIs: simulate, backtest, noise sweep, recency experiment |
 | `tests/` | pytest suite |
 
@@ -251,6 +277,10 @@ mypy
 - **The latent-strength term is unproven.** On the same held-out seasons,
   turning it off scored slightly better on title log loss - a lead to check,
   not a result.
+- **The seed-only baseline is not clearly beaten.** A forecast built from the
+  seed line alone scores better on title log loss and both Brier scores, and
+  only slightly worse on per-game win log loss, over the same four seasons.
+  The full model's advantage over a uniform field is mostly the seeding in it.
 
 A natural next step is to fix the 2021 source file so the backtest covers five
 seasons, then settle the latent term on more of them.

@@ -35,6 +35,7 @@ from src.backtest import (  # noqa: E402
     win_log_loss,
     win_log_loss_by_round,
 )
+from src.baselines import build_seed_baseline, load_seed_history  # noqa: E402
 from src.bracket import load_bracket, load_tourney_games  # noqa: E402
 from src.calibration import (  # noqa: E402
     build_particle_teams_from_fit,
@@ -88,6 +89,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--no-latent", dest="latent", action="store_false",
                    help="Force phi=0 even when it is estimable.")
     p.set_defaults(latent=True)
+    p.add_argument("--baseline", action="store_true",
+                   help="Also score the seed-only baseline (logistic seed "
+                        "difference, historical seed title shares) on the same "
+                        "seasons and print the comparison.")
     return p.parse_args(argv)
 
 
@@ -154,6 +159,18 @@ def evaluate_season(
 
     win_ll, n_games = win_log_loss(outcome, sim_teams, matchup)
 
+    seed_metrics: dict[str, float] = {}
+    if args.baseline:
+        hist_brackets, hist_outcomes = load_seed_history(args.data, history)
+        seed = build_seed_baseline(hist_brackets, hist_outcomes, bracket)
+        seed_win, _ = seed.win_log_loss(outcome)
+        seed_metrics = {
+            "seed_title_ll": title_log_loss(seed.result, outcome.champion),
+            "seed_win_ll": seed_win,
+            "seed_adv_brier": advancement_brier(seed.result, outcome),
+            "seed_reach_brier": reach_brier(seed.result, outcome),
+        }
+
     metrics = {
         "season": float(season),
         "title_ll": title_log_loss(result, outcome.champion),
@@ -168,6 +185,7 @@ def evaluate_season(
         "n_unseen": float(len(unseen)),
         "n_history": float(len(history)),
     }
+    metrics.update(seed_metrics)
 
     lines = []
     if unseen:
@@ -183,6 +201,13 @@ def evaluate_season(
             f"{names.get(t, t)} {p:.1%}" for t, p in ranked[: args.top]
         ),
     ]
+    if seed_metrics:
+        lines.append(
+            f"  seed-only     title log loss {seed_metrics['seed_title_ll']:.3f} | "
+            f"win log loss {seed_metrics['seed_win_ll']:.3f} | "
+            f"adv Brier {seed_metrics['seed_adv_brier']:.4f} | "
+            f"reach Brier {seed_metrics['seed_reach_brier']:.4f}"
+        )
     # Every forecastable single-game event, tagged with its round so the
     # reliability table can be split - see main() for why late rounds have
     # to be reported separately.
@@ -259,6 +284,18 @@ def main(argv: list[str] | None = None) -> int:
           f"{mean_reach:.4f}  (vs per-round base rate, below)")
     print(f"  top-pick hit rate       {hits:.1%}")
     print(f"  mean top-pick prob      {mean_top:.1%}")
+
+    if args.baseline and all("seed_title_ll" in row for row in rows):
+        seed_ll = sum(row["seed_title_ll"] for row in rows) / n
+        seed_win = sum(row["seed_win_ll"] for row in rows) / n
+        seed_adv = sum(row["seed_adv_brier"] for row in rows) / n
+        seed_reach = sum(row["seed_reach_brier"] for row in rows) / n
+        print()
+        print("  seed-only baseline:")
+        print(f"    mean title log loss     {seed_ll:.3f}")
+        print(f"    mean win log loss       {seed_win:.3f}")
+        print(f"    mean advancement Brier  {seed_adv:.4f}")
+        print(f"    mean reach Brier        {seed_reach:.4f}")
 
     # The reach floor is not a single number: it depends on how deep the field
     # gets, so it is shown per round rather than quoted once.

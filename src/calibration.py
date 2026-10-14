@@ -100,13 +100,22 @@ class DyadicFit:
 
 
 def _hetero_loglik(
-    resid: np.ndarray, tau: np.ndarray
+    resid: np.ndarray, tau: np.ndarray, weights: np.ndarray | None = None
 ) -> float:
-    """Gaussian log-likelihood with per-game scale ``tau``."""
+    """Gaussian log-likelihood with per-game scale ``tau``.
+
+    ``weights`` optionally multiplies each game's contribution (recency
+    weighting).  ``None`` takes the *same* expression as the unweighted
+    estimator - not an algebraically equal rearrangement - so the default path
+    stays bit-for-bit identical to the pre-weighting implementation.
+    """
     var = tau**2
     if not np.all(np.isfinite(var)) or np.any(var <= 0.0):
         return -math.inf
-    return float(-0.5 * np.sum(np.log(2.0 * math.pi * var) + resid**2 / var))
+    if weights is None:
+        return float(-0.5 * np.sum(np.log(2.0 * math.pi * var) + resid**2 / var))
+    per_game = -0.5 * (np.log(2.0 * math.pi * var) + resid**2 / var)
+    return float(np.sum(per_game * weights))
 
 
 def _solve_ridge(
@@ -128,10 +137,17 @@ def _solve_ridge_with_home(
     margin: np.ndarray,
     prior: np.ndarray,
     ridge: float,
+    weights: np.ndarray | None = None,
 ) -> tuple[np.ndarray, float]:
     """Jointly solve for strengths and home advantage.
 
     Minimises ``||A s + hca*h - m||^2 + ridge*||s - prior||^2``.
+
+    ``weights`` optionally applies a per-game weight ``w_i`` to the residual
+    term, i.e. it minimises ``sum_i w_i (A_i s + hca h_i - m_i)^2 + ridge*||s -
+    prior||^2``.  This is done by scaling each design row and target by
+    ``sqrt(w_i)``, which is exact.  ``weights=None`` reproduces the unweighted
+    solve exactly.
 
     The penalty applies to the strengths only, never to ``hca``.  The
     home-advantage column is not in ``col(A)``, so it is already identified by
@@ -142,10 +158,16 @@ def _solve_ridge_with_home(
     schedule.
     """
     n_teams = design.shape[1]
-    augmented = np.column_stack([design, home_sign])
+    if weights is None:
+        augmented = np.column_stack([design, home_sign])
+        target = margin
+    else:
+        root = np.sqrt(np.asarray(weights, dtype=float))
+        augmented = np.column_stack([design * root[:, None], home_sign * root])
+        target = margin * root
     penalty = np.diag([ridge] * n_teams + [0.0])
     gram = augmented.T @ augmented + penalty
-    moment = augmented.T @ margin + penalty @ np.append(prior, 0.0)
+    moment = augmented.T @ target + penalty @ np.append(prior, 0.0)
     try:
         solution = np.linalg.solve(gram, moment)
     except np.linalg.LinAlgError:
@@ -163,6 +185,7 @@ def _grid_volatility(
     start: tuple[float, float, float],
     span: tuple[float, float, float],
     steps: int,
+    weights: np.ndarray | None = None,
 ) -> tuple[tuple[float, float, float], float]:
     """Multi-resolution grid search for ``(sigma_0, alpha, beta)``.
 
@@ -198,7 +221,7 @@ def _grid_volatility(
                     tau = np.sqrt(
                         (s0 + a * z_i + b * w_i) ** 2 + (s0 + a * z_j + b * w_j) ** 2
                     )
-                    ll = _hetero_loglik(resid, tau)
+                    ll = _hetero_loglik(resid, tau, weights)
                     if ll > best_ll:
                         best_ll, best = ll, (float(s0), float(a), float(b))
         cur_start = best
@@ -315,6 +338,43 @@ def estimate_latent_fraction(
     return float(min(max(float(np.mean(ratios)), 0.0), 0.95))
 
 
+def _recency_weights(seasons: np.ndarray, half_life: float) -> np.ndarray:
+    """Mean-one exponential recency weights for games, keyed by season.
+
+    A game from season ``s`` gets weight ``w(s) = 2 ** (-(s_max - s) / H)``
+    where ``s_max`` is the most recent season present and ``H`` is the
+    half-life in seasons: a game ``H`` seasons older than the latest counts
+    half as much.  Weighting is relative, so shifting every season by a
+    constant leaves the result unchanged.
+
+    The weights are divided by their mean before use.  That keeps the overall
+    scale of the fitting objective - and therefore the data-to-ridge balance -
+    fixed as ``H`` varies, so the experiment measures recency and not an
+    incidental change in regularisation.
+
+    Args:
+        seasons: Season of each game.
+        half_life: Half-life in seasons.  ``inf`` means no weighting (all
+            weights 1), which is the production default.
+
+    Returns:
+        One weight per game, with mean 1.
+
+    Raises:
+        ValueError: If ``half_life`` is not positive (``inf`` is allowed).
+    """
+    seasons = np.asarray(seasons, dtype=float)
+    if half_life == math.inf:
+        return np.ones_like(seasons)
+    if not (math.isfinite(half_life) and half_life > 0.0):
+        raise ValueError(
+            f"half_life must be positive and finite (or inf), got {half_life!r}"
+        )
+    s_max = float(seasons.max())
+    raw = np.power(2.0, -(s_max - seasons) / half_life)
+    return raw / raw.mean()
+
+
 def fit_dyadic(
     games: pd.DataFrame,
     teams: Mapping[int, ParticleTeam],
@@ -325,6 +385,7 @@ def fit_dyadic(
     tolerance: float = 1e-7,
     initial_volatility: VolatilityParams | None = None,
     scales: FeatureScales | None = None,
+    half_life: float = math.inf,
 ) -> DyadicFit:
     """Fit team strengths, Elo scale, home advantage and volatility jointly.
 
@@ -350,6 +411,12 @@ def fit_dyadic(
             scale, since it seeds the scale that the margin likelihood sees.
         scales: Pre-computed feature standardisation.  Recomputed from
             ``teams`` when omitted.
+        half_life: Recency half-life in seasons.  Each game's contribution to
+            the strength and volatility objectives is weighted by
+            ``2 ** (-(s_max - s) / half_life)`` and renormalised to mean one.
+            The default ``inf`` disables weighting entirely, so the fit is
+            bit-for-bit the unweighted estimator.  ``games`` must carry a
+            ``Season`` column when this is finite.
 
     Returns:
         A :class:`DyadicFit`.
@@ -416,6 +483,20 @@ def fit_dyadic(
     initial = initial_volatility or VolatilityParams(sigma_0=10.0, alpha=0.0, beta=0.0)
     prior_strength = elo_centered / float(elo_per_point)
 
+    prior_strength = elo_centered / float(elo_per_point)
+
+    # Recency weighting is opt-in: half_life=inf leaves ``weights`` as None and
+    # every downstream call takes its original, unweighted branch.
+    if half_life == math.inf:
+        weights = None
+    else:
+        if "Season" not in games.columns:
+            raise ValueError(
+                "games must carry a Season column for recency weighting "
+                "(half_life < inf)"
+            )
+        weights = _recency_weights(games["Season"].to_numpy(), half_life)
+
     hca = 0.0
     params = (float(initial.sigma_0), float(initial.alpha), float(initial.beta))
 
@@ -428,7 +509,7 @@ def fit_dyadic(
     for iteration in range(1, max_iter + 1):
         iters = iteration
         strengths, hca = _solve_ridge_with_home(
-            design, home_sign, margin, prior_strength, ridge
+            design, home_sign, margin, prior_strength, ridge, weights
         )
 
         resid = margin - (design @ strengths + hca * home_sign)
@@ -441,6 +522,7 @@ def fit_dyadic(
             start=params,
             span=(max(params[0] * 0.75, 1.0), 2.0, 2.0),
             steps=9,
+            weights=weights,
         )
 
         # Convergence is judged on the log-likelihood, not on the strengths.
@@ -486,6 +568,7 @@ def fit_dyadic(
             "p3ar_sd": scales.p3ar_sd,
             "effvar_mean": scales.effvar_mean,
             "effvar_sd": scales.effvar_sd,
+            "half_life": float(half_life),
         },
     )
 

@@ -79,8 +79,10 @@ and `SimulationResult.standard_errors()` returns their standard errors.
 
 ## Results
 
-Two questions: are the probabilities *right* (backtest), and how does the
-model's uncertainty behave under the effective-noise knob (sweep)?
+Three questions: are the probabilities *right* (backtest); how does the
+model's uncertainty behave under the effective-noise knob (sweep); and does
+weighting recent games more fix the all-history model's prestige bias (recency
+weighting - rejected, below)?
 
 ### Backtest (walk-forward, 2021-2025)
 
@@ -139,6 +141,47 @@ survives the late rounds.
 Reproduce with `python tools/noise_sweep.py --sims 10000`, which writes
 `results/noise_sweep.csv` and both figures.
 
+### Recency weighting (rejected)
+
+The all-history fit pools every season from 2003 onward into one static team
+strength, so the top of its rating list reads like a prestige ranking rather
+than a current-form ranking: fitted strength tracks the seed (Spearman ~0.82)
+but only weakly tracks the current Elo (~0.15). A natural fix is to weight
+recent games more. `fit_dyadic` takes an optional `half_life H` in seasons,
+weighting each game by `2 ** (-(s_max - s) / H)` (normalized to mean 1) in both
+the strength and the volatility objectives; `H = inf` is the shipped default and
+is bit-for-bit the old model.
+
+Selected on dev seasons 2015-2019 (the earliest window whose fit span reaches
+the 12 seasons the latent estimate needs; 2020 was cancelled and 2021 is
+defective), then scored once on 2022-2025. The dev curve is monotone toward
+stronger recency - and its optimum sits on the grid edge, which is already a
+warning sign:
+
+| H (seasons) | dev title log loss | dev win log loss |
+| ---: | ---: | ---: |
+| 2 | **2.579** | 0.567 |
+| 4 | 2.763 | 0.575 |
+| 8 | 2.871 | 0.577 |
+| inf | 2.993 | 0.578 |
+
+The gain does not survive out of sample. On 2022-2025, recency makes the
+headline metric *worse*:
+
+| model | title log loss | win log loss |
+| --- | ---: | ---: |
+| A: `inf`, latent on (shipped) | **3.115** | 0.616 |
+| B: `H = 2`, latent on | 3.892 | 0.599 |
+
+`B - A` is `+0.778` title log loss (worse) and `-0.017` win log loss (noise).
+Recency weighting is **rejected** and the default stays `H = inf`. It also does
+not fix what motivated it: at `H = 2` Gonzaga is still the top-rated team in all
+four held-out seasons.
+
+Reproduce with `python tools/recency_experiment.py select` (dev, picks `H`) and
+`python tools/recency_experiment.py evaluate --half-life 2` (held-out). Raw
+output is in `results/recency_select.txt` and `results/recency_evaluate.txt`.
+
 ## Getting started
 
 ```bash
@@ -161,7 +204,7 @@ python tools/backtest.py --seasons 2021 2022 2023 2024 2025
 Checks:
 
 ```bash
-pytest          # 336 tests
+pytest          # 356 tests
 ruff check .
 mypy
 ```
@@ -177,13 +220,15 @@ mypy
 | `src/bracket.py` | bracket graph from seeds/slots |
 | `src/simulate.py` | Monte Carlo tournament runner |
 | `src/backtest.py` | scoring metrics and ground truth |
-| `tools/` | runnable CLIs: simulate, backtest, noise sweep |
+| `tools/` | runnable CLIs: simulate, backtest, noise sweep, recency experiment |
 | `tests/` | pytest suite |
 
 ## Where it's going
 
 - More seasons in the backtest (2021 needs a fixed source file) and tighter
   calibration reporting
+- Re-examining the latent-strength term: on the held-out seasons, turning it off
+  scored better on title log loss than turning it on (a lead, not yet a result)
 - Feature work on volatility and the latent-strength term
 - Choosing `noise_scale` by forecasting performance out of sample, not by
   tuning it against the seasons it is scored on

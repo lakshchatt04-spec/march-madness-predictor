@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import math
 import sys
 from pathlib import Path
 
@@ -53,7 +54,7 @@ def _default_data() -> Path:
         candidate = parent / DATA_DIRNAME
         if candidate.is_dir():
             return candidate
-        nested = parent / "march-madness-physics" / DATA_DIRNAME
+        nested = parent / "march-madness-predictor" / DATA_DIRNAME
         if nested.is_dir():
             return nested
     raise FileNotFoundError(
@@ -72,6 +73,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         "earlier seasons.")
     p.add_argument("--first-fit-season", type=int, default=MIN_HISTORY,
                    help="Earliest season usable for fitting.")
+    p.add_argument("--half-life", type=float, default=math.inf,
+                   help="Recency half-life in seasons for the strength fit. "
+                        "inf (default) is the unweighted all-history model; a "
+                        "finite value down-weights older games.")
     p.add_argument("--trailing", type=int, default=None,
                    help="Fit on this many seasons immediately before each "
                         "evaluation season instead of all history.")
@@ -108,7 +113,7 @@ def evaluate_season(
 
     games = load_games(args.data, seasons=history)
     fit_teams = load_particle_teams(args.data, seasons=history)
-    fit = fit_dyadic(games, fit_teams)
+    fit = fit_dyadic(games, fit_teams, half_life=args.half_life)
 
     # Features for the evaluation season, but strengths from the prior fit.
     season_teams = load_particle_teams(args.data, seasons=(season,))

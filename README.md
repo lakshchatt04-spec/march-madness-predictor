@@ -3,21 +3,24 @@
 Simulate the men's NCAA tournament and come out with *probabilities*, not just
 picks.
 
-**Status: work in progress.** The core pipeline (fit -> simulate -> backtest)
-runs and is tested, but the modelling and the analysis are still being
-developed.
+**Status: work in progress.** The pipeline (fit -> simulate -> backtest) runs
+and is tested; the evaluation so far is a first look (see
+[Limitations](#limitations-and-next-steps)).
 
-## Goal
+## What it does
 
-A bracket pool rewards picking winners; a sportsbook, a seeding study or any
-serious "how good is this team" question needs `P(team X wins it all)`. The
-goal here is a model whose probabilities are actually *calibrated* - when it
-says 70%, the team should win about 70% of the time - and a backtest rigorous
-enough to tell whether that is true.
+The model is a hierarchical Gaussian over game margins. Each team carries an
+end-of-season strength and a volatility; a game is a Gaussian margin around the
+Elo difference plus a persistent per-team offset drawn once per simulated
+tournament (`src/matchup.py`). The strengths come from a dyadic ridge
+regression on regular-season margins, anchored to sequential Elo ratings
+(`src/calibration.py`).
 
-The thermodynamics framing is the organising idea: each team is a particle with
-a small vector of end-of-season state variables, and tournament outcomes are
-sampled from that state rather than hand-tuned.
+I built it to answer one narrow question: **how good are the probabilities?**
+A bracket pool only needs a winner, but a sportsbook or a seeding study needs
+`P(team X wins it all)`, and that number is useful only if it is calibrated -
+when the model says 70%, the team should win about 70% of the time. So the
+project's real target is the backtest, not the bracket.
 
 ## How it works
 
@@ -49,23 +52,15 @@ Beyond picking winners, `SimulationResult` reports summary statistics of the
 distribution, not how good the forecast is (that is the backtest's job, via
 log loss and Brier).
 
-- **Championship entropy** - Shannon entropy of the title distribution,
-  `H = -sum_i P_i ln P_i`, in nats. It is zero when one team wins every
-  simulation and `ln F` when the title is spread evenly over the whole field.
-  The normalized version `h = H / ln F` sits in `[0, 1]`: low means the model
-  sees a few clear contenders, high means the title looks wide open.
-- **Concentration** - the same picture in different units. `P(max)` is the
-  favourite's title probability, `P(top 3)` the three front-runners summed,
-  `C = sum_i P_i^2` the Herfindahl index (from `1/F` for an even field to 1
-  for a certain champion), and `N_eff = 1/C` the effective number of
-  contenders - how many teams would have to share the title evenly to produce
-  the same concentration. A settled championship has low entropy and high
-  concentration; an open one the reverse.
-- **Round entropy** - the entropy of the marginal distribution over which
-  teams are present at the start of each round, normalized by `ln F`. The
-  first round sits at 1 (everyone plays), and later rounds fall as the field
-  narrows toward the finalists. It is a per-round marginal - the uncertainty
-  about who is still alive - not the entropy of whole tournament paths.
+- **Championship entropy** - `H = -sum_i P_i ln P_i` (nats), normalized
+  `h = H / ln F`. Low `h` means a few clear contenders, high means a wide-open
+  field.
+- **Concentration** - the same information in different units: `P(max)` (the
+  favourite), `P(top 3)`, the Herfindahl index `C = sum_i P_i^2`, and the
+  effective number of contenders `N_eff = 1/C`.
+- **Round entropy** - the entropy of the marginal distribution over teams alive
+  at the start of each round, normalized by `ln F`: uncertainty about who is
+  still alive, not the entropy of whole tournament paths.
 
 Monte Carlo error: each run is split into independent batches (20 by default)
 and the standard error of every observable is the batch-to-batch spread
@@ -189,6 +184,19 @@ four held-out seasons.
 Reproduce with `python tools/recency_experiment.py select` (dev, picks `H`) and
 `python tools/recency_experiment.py evaluate --half-life 2` (held-out). Raw
 output is in `results/recency_select.txt` and `results/recency_evaluate.txt`.
+
+## What I learned
+
+The recency experiment is the one that stuck. Weighting recent games more made
+every development number better - dev title log loss fell from 2.99 to 2.58, and
+the improvement was monotone all the way to the edge of the grid I searched. It
+looked like a clean win. On the held-out seasons it went the other way: title
+log loss rose from 3.12 to 3.89, and the thing it was meant to fix was still
+broken. The lesson isn't subtle, but I had to earn it - a better number on the
+seasons I was choosing against is not evidence, and the optimum sitting on the
+grid edge was the tell I ignored. That's why the default is still the plain
+all-history model, and why I now hold in-sample improvements at arm's length
+until they survive a season they never touched.
 
 ## Getting started
 

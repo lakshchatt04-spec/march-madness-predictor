@@ -1,7 +1,7 @@
 [project]
 name = "marchmadness-engine"
 version = "0.1.0"
-description = "Data pipeline for a thermodynamics-inspired March Madness simulation"
+description = "March Madness bracket simulation with probabilistic win forecasts and a walk-forward backtest"
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.26", "pandas>=2.0"]
 

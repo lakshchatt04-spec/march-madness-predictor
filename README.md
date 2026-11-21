@@ -48,13 +48,13 @@ centrepiece.
 
 ```mermaid
 flowchart LR
-    A[Kaggle CSVs] --> B[data_loader.py<br/>sequential Elo + volatility features]
-    B --> C[calibration.py<br/>dyadic ridge fit<br/>strength, sigma, phi]
-    C --> D[matchup.py<br/>P(i beats j) = Phi(mu / tau)]
-    D --> E[bracket.py<br/>seed + slot graph]
-    E --> F[simulate.py<br/>Monte Carlo + observables]
-    F --> G[backtest.py<br/>log loss / Brier / reliability]
-    F --> H[results/<br/>tables + figures]
+    A["Kaggle CSVs"] --> B["data_loader.py<br/>sequential Elo + volatility features"]
+    B --> C["calibration.py<br/>dyadic ridge fit<br/>strength, sigma, phi"]
+    C --> D["matchup.py<br/>P(i beats j) = Phi(mu / tau)"]
+    D --> E["bracket.py<br/>seed + slot graph"]
+    E --> F["simulate.py<br/>Monte Carlo + observables"]
+    F --> G["backtest.py<br/>log loss / Brier / reliability"]
+    F --> H["results/<br/>tables + figures"]
 ```
 
 1. **Ingest** (`src/data_loader.py`). Build each team's state from regular-season
